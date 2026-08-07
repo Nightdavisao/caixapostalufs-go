@@ -4,7 +4,6 @@ import (
 	"caixapostalufs-go/internal/rest"
 	"crypto/subtle"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/emersion/go-imap/v2"
@@ -23,22 +22,13 @@ type User struct {
 	restClient *rest.CaixaPostalClient
 }
 
-func NewUser(username, password string) *User {
+func NewRESTUser(username, password string, client *rest.CaixaPostalClient) *User {
 	return &User{
 		username:  username,
 		password:  password,
 		mailboxes: make(map[string]*Mailbox),
+		restClient: client,
 	}
-}
-
-func NewRESTUser(username, password string, client *rest.CaixaPostalClient) *User {
-	u := NewUser(username, password)
-	u.restClient = client
-	return u
-}
-
-func (u *User) IsRESTBacked() bool {
-	return u.restClient != nil
 }
 
 func (u *User) Login(username, password string) error {
@@ -81,8 +71,6 @@ func (u *User) List(w *imapserver.ListWriter, ref string, patterns []string, opt
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
 
-	// TODO: fail if ref doesn't exist
-
 	if len(patterns) == 0 {
 		return w.WriteList(&imap.ListData{
 			Attrs: []imap.MailboxAttr{imap.MailboxAttrNoSelect},
@@ -123,89 +111,19 @@ func (u *User) List(w *imapserver.ListWriter, ref string, patterns []string, opt
 }
 
 func (u *User) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
-	if u.IsRESTBacked() {
-		return nil, operationNotAllowedIMAP()
-	}
-	mbox, err := u.mailbox(mailbox)
-	if err != nil {
-		return nil, &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
-	}
-	return mbox.appendLiteral(r, options)
+	return nil, operationNotAllowedIMAP()
 }
 
 func (u *User) Create(name string, options *imap.CreateOptions) error {
-	if u.IsRESTBacked() {
-		return operationNotAllowedIMAP()
-	}
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
-
-	name = strings.TrimRight(name, string(mailboxDelim))
-
-	if u.mailboxes[name] != nil {
-		return &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeAlreadyExists,
-			Text: "Mailbox already exists",
-		}
-	}
-
-	// UIDVALIDITY must change if a mailbox is deleted and re-created with the
-	// same name.
-	u.prevUidValidity++
-	mbox := NewMailbox(name, u.prevUidValidity)
-	if options != nil && len(options.SpecialUse) > 0 {
-		mbox.specialUse = append(mbox.specialUse, options.SpecialUse...)
-	}
-	u.mailboxes[name] = mbox
-	return nil
+	return operationNotAllowedIMAP()
 }
 
 func (u *User) Delete(name string) error {
-	if u.IsRESTBacked() {
-		return operationNotAllowedIMAP()
-	}
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
-
-	if _, err := u.mailboxLocked(name); err != nil {
-		return err
-	}
-
-	delete(u.mailboxes, name)
-	return nil
+	return operationNotAllowedIMAP()
 }
 
 func (u *User) Rename(oldName, newName string, options *imap.RenameOptions) error {
-	if u.IsRESTBacked() {
-		return operationNotAllowedIMAP()
-	}
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
-
-	newName = strings.TrimRight(newName, string(mailboxDelim))
-
-	mbox, err := u.mailboxLocked(oldName)
-	if err != nil {
-		return err
-	}
-
-	if u.mailboxes[newName] != nil {
-		return &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeAlreadyExists,
-			Text: "Mailbox already exists",
-		}
-	}
-
-	mbox.rename(newName)
-	u.mailboxes[newName] = mbox
-	delete(u.mailboxes, oldName)
-	return nil
+	return operationNotAllowedIMAP()
 }
 
 func (u *User) Subscribe(name string) error {
@@ -237,7 +155,7 @@ func (u *User) appendRESTMessage(mailbox string, restID int, raw string, options
 	if err != nil {
 		return nil, err
 	}
-	return mbox.appendBytesWithRESTID([]byte(raw), options, restID), nil
+	return mbox.appendBytes([]byte(raw), options, restID), nil
 }
 
 func operationNotAllowedIMAP() error {

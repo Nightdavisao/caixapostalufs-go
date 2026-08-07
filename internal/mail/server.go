@@ -8,9 +8,6 @@ import (
 
 type Authenticator func(username, password string) (*User, error)
 
-// Server is a server instance.
-//
-// A server contains a list of users.
 type Server struct {
 	mutex sync.Mutex
 	users map[string]*User
@@ -25,7 +22,6 @@ func NewWithAuthenticator(authenticator Authenticator) *Server {
 	}
 }
 
-// NewSession creates a new IMAP session.
 func (s *Server) NewSession() imapserver.Session {
 	return &serverSession{server: s}
 }

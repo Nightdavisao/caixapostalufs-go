@@ -96,11 +96,6 @@ func (msg *message) flagList() []imap.Flag {
 	return flags
 }
 
-func (msg *message) hasFlag(flag imap.Flag) bool {
-	_, ok := msg.flags[canonicalFlag(flag)]
-	return ok
-}
-
 func (msg *message) store(store *imap.StoreFlags) {
 	switch store.Op {
 	case imap.StoreFlagsSet:
@@ -276,4 +271,9 @@ func matchEntity(e *gomessage.Entity, pattern string, includeHeader bool) bool {
 
 func canonicalFlag(flag imap.Flag) imap.Flag {
 	return imap.Flag(strings.ToLower(string(flag)))
+}
+
+func (msg *message) hasFlag(flag imap.Flag) bool {
+	_, ok := msg.flags[canonicalFlag(flag)]
+	return ok
 }

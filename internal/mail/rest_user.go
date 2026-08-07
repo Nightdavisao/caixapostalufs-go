@@ -148,7 +148,15 @@ func buildRFC822(client *rest.CaixaPostalClient, msg rest.MensagemCaixaPostal, c
 
 	date := messageDate(msg).Format(time.RFC1123Z)
 	if len(attachments) == 0 {
-		return fmt.Sprintf("From: %s <%s>\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <ufs-%d@sistemas.ufs.br>\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
+		return fmt.Sprintf(
+			"From: %s <%s>\r\n"+
+				"To: %s\r\n"+
+				"Subject: %s\r\n"+
+				"Date: %s\r\n"+
+				"Message-ID: <ufs-%d@sistemas.ufs.br>\r\n"+
+				"MIME-Version: 1.0\r\n"+
+				"Content-Type: text/html; charset=UTF-8\r\n"+
+				"Content-Transfer-Encoding: 8bit\r\n\r\n%s",
 			fromName,
 			fromEmail,
 			to,
@@ -165,7 +173,12 @@ func buildRFC822(client *rest.CaixaPostalClient, msg rest.MensagemCaixaPostal, c
 		return "", err
 	}
 
-	return fmt.Sprintf("From: %s <%s>\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <ufs-%d@sistemas.ufs.br>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n%s",
+	return fmt.Sprintf("From: %s <%s>\r\n"+
+		"To: %s\r\n"+
+		"Subject: %s\r\n"+
+		"Date: %s\r\n"+"Message-ID: <ufs-%d@sistemas.ufs.br>\r\n"+
+		"MIME-Version: 1.0\r\n"+
+		"Content-Type: multipart/mixed; boundary=%q\r\n\r\n%s",
 		fromName,
 		fromEmail,
 		to,

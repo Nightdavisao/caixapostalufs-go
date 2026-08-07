@@ -10,10 +10,6 @@ type (
 	mailbox = MailboxView
 )
 
-// UserSession represents a session tied to a specific user.
-//
-// UserSession implements imapserver.Session. Typically, a UserSession pointer
-// is embedded into a larger struct which overrides Login.
 type UserSession struct {
 	*user    // immutable
 	*mailbox // may be nil
@@ -21,7 +17,6 @@ type UserSession struct {
 
 var _ imapserver.SessionIMAP4rev2 = (*UserSession)(nil)
 
-// NewUserSession creates a new user session.
 func NewUserSession(user *User) *UserSession {
 	return &UserSession{user: user}
 }
@@ -51,93 +46,18 @@ func (sess *UserSession) Unselect() error {
 }
 
 func (sess *UserSession) Copy(numSet imap.NumSet, destName string) (*imap.CopyData, error) {
-	if sess.user.IsRESTBacked() {
-		return nil, operationNotAllowedIMAP()
-	}
-
-	dest, err := sess.user.mailbox(destName)
-	if err != nil {
-		return nil, &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
-	} else if sess.mailbox != nil && dest == sess.mailbox.Mailbox {
-		return nil, &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Text: "Source and destination mailboxes are identical",
-		}
-	}
-
-	var sourceUIDs, destUIDs imap.UIDSet
-	sess.mailbox.forEach(numSet, func(seqNum uint32, msg *message) {
-		appendData := dest.copyMsg(msg)
-		sourceUIDs.AddNum(msg.uid)
-		destUIDs.AddNum(appendData.UID)
-	})
-
-	return &imap.CopyData{
-		UIDValidity: dest.uidValidity,
-		SourceUIDs:  sourceUIDs,
-		DestUIDs:    destUIDs,
-	}, nil
+	return nil, operationNotAllowedIMAP()
 }
 
 func (sess *UserSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, destName string) error {
-	if sess.user.IsRESTBacked() {
-		return sess.restMove(w, numSet, destName)
-	}
-
-	dest, err := sess.user.mailbox(destName)
-	if err != nil {
-		return &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
-	} else if sess.mailbox != nil && dest == sess.mailbox.Mailbox {
-		return &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Text: "Source and destination mailboxes are identical",
-		}
-	}
-
-	sess.mailbox.mutex.Lock()
-	defer sess.mailbox.mutex.Unlock()
-
-	var sourceUIDs, destUIDs imap.UIDSet
-	expunged := make(map[*message]struct{})
-	sess.mailbox.forEachLocked(numSet, func(seqNum uint32, msg *message) {
-		appendData := dest.copyMsg(msg)
-		sourceUIDs.AddNum(msg.uid)
-		destUIDs.AddNum(appendData.UID)
-		expunged[msg] = struct{}{}
-	})
-	seqNums := sess.mailbox.expungeLocked(expunged)
-
-	err = w.WriteCopyData(&imap.CopyData{
-		UIDValidity: dest.uidValidity,
-		SourceUIDs:  sourceUIDs,
-		DestUIDs:    destUIDs,
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, seqNum := range seqNums {
-		if err := w.WriteExpunge(sess.mailbox.tracker.EncodeSeqNum(seqNum)); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return sess.restMove(w, numSet, destName)
 }
 
 func (sess *UserSession) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, options *imap.FetchOptions) error {
 	if sess.mailbox == nil {
 		return nil
 	}
-	if sess.user.IsRESTBacked() && shouldMarkSeenOnFetch(options) {
+	if shouldMarkSeenOnFetch(options) {
 		if err := sess.markMessagesSeen(numSet); err != nil {
 			return err
 		}
@@ -149,10 +69,7 @@ func (sess *UserSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, fl
 	if sess.mailbox == nil {
 		return nil
 	}
-	if !sess.user.IsRESTBacked() {
-		return sess.mailbox.Store(w, numSet, flags, options)
-	}
-
+	
 	if changesSeenState(flags) {
 		switch flags.Op {
 		case imap.StoreFlagsAdd, imap.StoreFlagsSet:
@@ -171,10 +88,7 @@ func (sess *UserSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet)
 	if sess.mailbox == nil {
 		return nil
 	}
-	if !sess.user.IsRESTBacked() {
-		return sess.mailbox.Expunge(w, uids)
-	}
-
+	
 	ids := sess.deletedRESTIDs(uids)
 	if len(ids) > 0 {
 		if _, err := sess.user.restClient.DeleteMailMessage(ids); err != nil {

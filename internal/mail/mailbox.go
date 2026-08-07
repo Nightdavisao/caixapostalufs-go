@@ -10,10 +10,6 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver"
 )
 
-// Mailbox is an in-memory mailbox.
-//
-// The same mailbox can be shared between multiple connections and multiple
-// users.
 type Mailbox struct {
 	tracker     *imapserver.MailboxTracker
 	uidValidity uint32
@@ -124,24 +120,20 @@ func (mbox *Mailbox) appendLiteral(r imap.LiteralReader, options *imap.AppendOpt
 	if _, err := buf.ReadFrom(r); err != nil {
 		return nil, err
 	}
-	return mbox.appendBytes(buf.Bytes(), options), nil
+	return mbox.appendBytes(buf.Bytes(), options, 0), nil
 }
 
 func (mbox *Mailbox) copyMsg(msg *message) *imap.AppendData {
-	return mbox.appendBytesWithRESTID(msg.buf, &imap.AppendOptions{
+	return mbox.appendBytes(msg.buf, &imap.AppendOptions{
 		Time:  msg.t,
 		Flags: msg.flagList(),
 	}, msg.restID)
 }
 
-func (mbox *Mailbox) appendBytes(buf []byte, options *imap.AppendOptions) *imap.AppendData {
-	return mbox.appendBytesWithRESTID(buf, options, 0)
-}
-
-func (mbox *Mailbox) appendBytesWithRESTID(buf []byte, options *imap.AppendOptions, restID int) *imap.AppendData {
+func (mbox *Mailbox) appendBytes(buf []byte, options *imap.AppendOptions, id int) *imap.AppendData {
 	msg := &message{
 		flags:  make(map[imap.Flag]struct{}),
-		restID: restID,
+		restID: id,
 		buf:    buf,
 	}
 
